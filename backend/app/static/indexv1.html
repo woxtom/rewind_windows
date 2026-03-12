@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rewind Markdown</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="page-header">
+      <div>
+        <h1>Rewind Markdown</h1>
+        <p>
+          Capture screenshots, convert them into retrieval-friendly Markdown, embed them with time,
+          and query your screen history from a browser.
+        </p>
+      </div>
+      <div class="status-chip" id="statusChip">Loading status…</div>
+    </header>
+
+    <main class="layout">
+      <section class="panel">
+        <h2>Capture pipeline</h2>
+        <div class="button-row">
+          <button id="startCapture">Start capture loop</button>
+          <button id="stopCapture" class="secondary">Stop</button>
+          <button id="runCaptureOnce" class="secondary">Run once</button>
+        </div>
+        <dl class="key-value" id="captureStatus"></dl>
+      </section>
+
+      <section class="panel">
+        <h2>Ask your screen history</h2>
+        <label>
+          <span>Question</span>
+          <textarea id="queryInput" rows="4" placeholder="What was I looking at when I was debugging the login issue?"></textarea>
+        </label>
+        <label>
+          <span>Optional time filter</span>
+          <input id="timeFilterInput" type="text" placeholder="yesterday afternoon, last 2 hours, between 3pm and 5pm yesterday" />
+        </label>
+        <div class="button-row">
+          <button id="previewTime">Preview time filter</button>
+          <button id="runQuery">Ask</button>
+        </div>
+        <div class="hint" id="timePreview">No time filter parsed yet.</div>
+      </section>
+
+      <section class="panel answer-panel">
+        <h2>Grounded answer</h2>
+        <div class="meta-line" id="cleanedQuery"></div>
+        <pre id="answerOutput">Run a query to see the final answer here.</pre>
+      </section>
+
+      <section class="panel full-span">
+        <h2>Retrieved observations</h2>
+        <div id="results" class="card-grid empty-state">No retrieval results yet.</div>
+      </section>
+
+      <section class="panel full-span">
+        <h2>Recent indexed observations</h2>
+        <div id="recentObservations" class="card-grid empty-state">No observations indexed yet.</div>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

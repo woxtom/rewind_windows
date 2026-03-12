@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+
+# Test and tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Local environment
+.env
+
+# Runtime data
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# Temporary local artifacts
+tmp*/
+tests/test_rewind_markdown.db
+tests/test_rewind_markdown.db-shm
+tests/test_rewind_markdown.db-wal
+
+# OS files
+Thumbs.db
+Desktop.ini

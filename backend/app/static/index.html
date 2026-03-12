@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rewind Markdown</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+    <!-- Markdown Parser -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- HTML Sanitizer for security against malicious window titles/content -->
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+  </head>
+  <body>
+    <div class="background-glow"></div>
+    
+    <header class="page-header">
+      <div class="header-text">
+        <h1>Rewind Markdown</h1>
+        <p>
+          Capture screenshots, convert them into retrieval-friendly Markdown, embed them with time,
+          and query your screen history from a browser.
+        </p>
+      </div>
+      <div class="status-chip" id="statusChip">
+        <span class="status-indicator"></span> Loading status…
+      </div>
+    </header>
+
+    <main class="layout">
+      <!-- Query Panel made prominent -->
+      <section class="panel full-span hero-panel">
+        <h2>Ask your screen history</h2>
+        <div class="query-container">
+          <label class="input-group">
+            <span>What are you looking for?</span>
+            <textarea id="queryInput" rows="3" placeholder="e.g. What was I looking at when I was debugging the login issue?"></textarea>
+          </label>
+          <label class="input-group">
+            <span>Time filter (Optional)</span>
+            <div class="input-with-button">
+              <input id="timeFilterInput" type="text" placeholder="yesterday afternoon, last 2 hours..." />
+              <button id="previewTime" class="secondary icon-btn" title="Preview time filter">⏱️ Preview</button>
+            </div>
+          </label>
+        </div>
+        <div class="button-row action-row">
+          <div class="hint" id="timePreview">No time filter parsed yet.</div>
+          <button id="runQuery" class="primary-btn">✨ Ask Rewind</button>
+        </div>
+      </section>
+
+      <!-- Answer Panel -->
+      <section class="panel answer-panel full-span">
+        <h2>Grounded answer</h2>
+        <div class="meta-line" id="cleanedQuery"></div>
+        <div id="answerOutput" class="markdown-body empty-answer">
+          Run a query to see the AI's response here.
+        </div>
+      </section>
+
+      <!-- Capture Pipeline details -->
+      <section class="panel capture-panel full-span">
+        <div class="panel-header-row">
+          <h2>Capture Pipeline</h2>
+          <div class="button-row">
+            <button id="startCapture">▶ Start Loop</button>
+            <button id="stopCapture" class="secondary">■ Stop</button>
+            <button id="runCaptureOnce" class="secondary">↻ Run Once</button>
+          </div>
+        </div>
+        <dl class="key-value" id="captureStatus"></dl>
+      </section>
+
+      <section class="panel full-span transparent-panel">
+        <h2>Retrieved Observations</h2>
+        <div id="results" class="card-grid empty-state">No retrieval results yet.</div>
+      </section>
+
+      <section class="panel full-span transparent-panel">
+        <h2>Recent Indexed Observations</h2>
+        <div id="recentObservations" class="card-grid empty-state">No observations indexed yet.</div>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
