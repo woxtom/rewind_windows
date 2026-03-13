@@ -12,9 +12,9 @@ Today it:
 
 ## Demo video
 
-[![Watch the demo](./docs/demo-poster.png)](https://github.com/woxtom/rewind_windows/releases/download/v0.0.1/rewind_windows.mp4)
+https://github.com/user-attachments/assets/b6b88f97-ed48-4750-af73-41ab55e3dc68
 
-Direct video: [rewind_windows.mp4](https://github.com/woxtom/rewind_windows/releases/download/v0.0.1/rewind_windows.mp4)
+Fallback download: [rewind_windows.mp4](https://github.com/woxtom/rewind_windows/releases/download/v0.0.1/rewind_windows.mp4)
 
 ## Architecture
 
