@@ -10,13 +10,11 @@ Today it:
 4. builds both observation-level and chunk-level embeddings for retrieval, and
 5. answers questions with hybrid retrieval plus natural-language time filters.
 
-## demo video
+## Demo video
 
-<video src="./rewind_windows.mp4" controls muted playsinline preload="metadata" width="100%">
-  Your Markdown viewer does not support inline video.
-</video>
+[![Watch the demo](./docs/demo-poster.png)](https://github.com/woxtom/rewind_windows/releases/download/v0.0.1/rewind_windows.mp4)
 
-If the video does not render inline, open [rewind_windows.mp4](./rewind_windows.mp4) directly.
+Direct video: [rewind_windows.mp4](https://github.com/woxtom/rewind_windows/releases/download/v0.0.1/rewind_windows.mp4)
 
 ## Architecture
 
