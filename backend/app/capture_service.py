@@ -7,9 +7,14 @@ from pathlib import Path
 from threading import Event, Lock, Thread
 import traceback
 
+from .chunking import build_observation_chunks
 from .config import Settings
 from .database import Database
 from .llm import LLMService
+from .models import ObservationChunkInput
+
+THUMBNAIL_MAX_DIMENSION = 960
+THUMBNAIL_WEBP_QUALITY = 70
 
 
 class CaptureService:
@@ -104,17 +109,16 @@ class CaptureService:
                 if not self.llm.configured:
                     raise RuntimeError("OPENAI_API_KEY is required for screenshot transcription and embeddings.")
 
-                from .capture.windows_capture import capture_visible_windows
+                from .capture.windows_capture import capture_active_window
 
                 cycle_dir = self.settings.screenshot_dir / started_at.strftime("%Y-%m-%d")
-                captures = capture_visible_windows(cycle_dir, captured_at=started_at)
+                captures = capture_active_window(cycle_dir, captured_at=started_at)
                 stats["windows_seen"] = len(captures)
 
                 for captured in captures:
                     try:
                         image_sha = _sha256_file(captured.path)
                         latest = self.database.get_latest_for_window(captured.window_key)
-                        relative_path = str(captured.path.resolve().relative_to(self.settings.screenshot_dir))
 
                         if latest and latest.image_sha256 == image_sha:
                             self.database.extend_observation(
@@ -132,13 +136,50 @@ class CaptureService:
                             continue
 
                         transcription = self.llm.transcribe_image_to_markdown(captured.path)
+                        if latest and _same_observation_content(
+                            latest.markdown,
+                            latest.notes,
+                            transcription.markdown,
+                            transcription.notes,
+                        ):
+                            self.database.extend_observation(
+                                latest.id,
+                                seen_at=started_at,
+                                screenshot_path=latest.screenshot_path,
+                                window_title=captured.title,
+                                pid=captured.pid,
+                            )
+                            stats["observations_extended"] += 1
+                            try:
+                                captured.path.unlink(missing_ok=True)
+                            except OSError:
+                                pass
+                            continue
+
+                        chunk_drafts = build_observation_chunks(
+                            window_title=captured.title,
+                            markdown=transcription.markdown,
+                            notes=transcription.notes,
+                        )
                         embedding_text = _build_embedding_text(
                             window_title=captured.title,
-                            seen_at=started_at,
                             markdown=transcription.markdown,
                             notes=transcription.notes,
                         )
                         embedding = self.llm.embed_text(embedding_text)
+                        chunk_embeddings = self.llm.embed_texts([chunk.text for chunk in chunk_drafts])
+                        chunk_payloads = [
+                            ObservationChunkInput(
+                                chunk_index=chunk.chunk_index,
+                                heading_path=chunk.heading_path,
+                                chunk_type=chunk.chunk_type,
+                                text=chunk.text,
+                                embedding=chunk_embeddings[index],
+                            )
+                            for index, chunk in enumerate(chunk_drafts)
+                        ]
+                        thumbnail_path = _compress_screenshot_for_thumbnail(captured.path)
+                        relative_path = str(thumbnail_path.resolve().relative_to(self.settings.screenshot_dir))
                         self.database.insert_observation(
                             window_key=captured.window_key,
                             window_title=captured.title,
@@ -148,6 +189,7 @@ class CaptureService:
                             markdown=transcription.markdown,
                             notes=transcription.notes,
                             embedding=embedding,
+                            chunks=chunk_payloads,
                             seen_at=started_at,
                         )
                         stats["observations_inserted"] += 1
@@ -183,10 +225,55 @@ def _sha256_file(path: Path) -> str:
     return hasher.hexdigest()
 
 
-def _build_embedding_text(*, window_title: str, seen_at: datetime, markdown: str, notes: str) -> str:
+def _build_embedding_text(*, window_title: str, markdown: str, notes: str) -> str:
     return (
         f"Window title: {window_title}\n"
-        f"Seen at: {seen_at.isoformat()}\n\n"
         f"Markdown:\n{markdown}\n\n"
         f"Notes:\n{notes or '-'}"
     )
+
+
+def _same_observation_content(
+    existing_markdown: str,
+    existing_notes: str,
+    new_markdown: str,
+    new_notes: str,
+) -> bool:
+    return _normalize_observation_text(existing_markdown, existing_notes) == _normalize_observation_text(
+        new_markdown,
+        new_notes,
+    )
+
+
+def _normalize_observation_text(markdown: str, notes: str) -> str:
+    normalized_markdown = (markdown or "").replace("\r\n", "\n").strip()
+    normalized_notes = (notes or "").replace("\r\n", "\n").strip()
+    return f"{normalized_markdown}\n\nNOTES\n{normalized_notes}".strip()
+
+
+def _compress_screenshot_for_thumbnail(source_path: Path) -> Path:
+    target_path = source_path.with_suffix(".webp")
+    try:
+        from PIL import Image
+
+        with Image.open(source_path) as image:
+            thumbnail = image.convert("RGB")
+            thumbnail.thumbnail(
+                (THUMBNAIL_MAX_DIMENSION, THUMBNAIL_MAX_DIMENSION),
+                Image.Resampling.LANCZOS,
+            )
+            thumbnail.save(
+                target_path,
+                format="WEBP",
+                quality=THUMBNAIL_WEBP_QUALITY,
+                method=6,
+            )
+        if target_path != source_path:
+            source_path.unlink(missing_ok=True)
+        return target_path
+    except Exception:
+        try:
+            target_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return source_path

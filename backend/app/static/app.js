@@ -1,3 +1,5 @@
+const THEME_KEY = "rewind-theme";
+
 const statusChip = document.getElementById("statusChip");
 const captureStatus = document.getElementById("captureStatus");
 const timePreview = document.getElementById("timePreview");
@@ -8,9 +10,31 @@ const recentObservations = document.getElementById("recentObservations");
 const queryInput = document.getElementById("queryInput");
 const timeFilterInput = document.getElementById("timeFilterInput");
 const runQueryBtn = document.getElementById("runQuery");
+const previewTimeBtn = document.getElementById("previewTime");
+const themeToggle = document.getElementById("themeToggle");
+const themeToggleLabel = document.getElementById("themeToggleLabel");
 
-// Configure Marked to support breaks and GitHub Flavored Markdown
 marked.use({ breaks: true, gfm: true });
+
+function getSystemTheme() {
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  document.documentElement.classList.toggle("dark", theme === "dark");
+  themeToggleLabel.textContent = theme === "dark" ? "Light" : "Dark";
+  themeToggle.title = theme === "dark" ? "Switch to light mode" : "Switch to dark mode";
+  themeToggle.setAttribute(
+    "aria-label",
+    theme === "dark" ? "Switch to light mode" : "Switch to dark mode",
+  );
+}
+
+function initializeTheme() {
+  const savedTheme = localStorage.getItem(THEME_KEY);
+  applyTheme(savedTheme || getSystemTheme());
+}
 
 async function fetchJSON(url, options = {}) {
   const response = await fetch(url, {
@@ -30,10 +54,29 @@ function formatDateTime(value) {
   if (!value) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  // Make the date output slightly cleaner
   return date.toLocaleString(undefined, {
-    month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
   });
+}
+
+function formatCompactDateTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString(undefined, {
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function formatScore(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric.toFixed(2) : null;
 }
 
 function escapeHtml(text) {
@@ -47,29 +90,55 @@ function escapeHtml(text) {
 }
 
 function renderStatus(data) {
-  statusChip.innerHTML = `<span class="status-indicator"></span> ${data.running ? "Loop Running" : "Loop Stopped"}`;
-  if (data.running) {
-    statusChip.classList.add("running");
-  } else {
-    statusChip.classList.remove("running");
-  }
+  statusChip.innerHTML = `<span class="status-indicator"></span> ${
+    data.running ? '<span class="status-chip__label">Live</span>' : '<span class="status-chip__label">Idle</span>'
+  }`;
+  statusChip.classList.toggle("running", Boolean(data.running));
+  statusChip.title = data.running ? "Capture loop running" : "Capture loop stopped";
 
   captureStatus.innerHTML = "";
   const pairs = [
-    ["Interval", `${data.interval_seconds}s`],
-    ["Last run", formatDateTime(data.last_run_started_at)],
-    ["Windows seen", data.stats.windows_seen ?? 0],
-    ["Observations", data.stats.total_observations ?? 0],
-    ["Inserted", data.stats.observations_inserted ?? 0],
-    ["Last error", data.last_error || "None"],
+    {
+      label: "Int",
+      value: `${data.interval_seconds}s`,
+      title: `Capture interval: ${data.interval_seconds} seconds`,
+    },
+    {
+      label: "Seen",
+      value: String(data.stats.windows_seen ?? 0),
+      title: `Windows seen: ${data.stats.windows_seen ?? 0}`,
+    },
+    {
+      label: "Obs",
+      value: String(data.stats.total_observations ?? 0),
+      title: `Indexed observations: ${data.stats.total_observations ?? 0}`,
+    },
+    {
+      label: "New",
+      value: String(data.stats.observations_inserted ?? 0),
+      title: `Inserted observations: ${data.stats.observations_inserted ?? 0}`,
+    },
+    {
+      label: "Last",
+      value: data.last_run_completed_at ? formatCompactDateTime(data.last_run_completed_at) : "-",
+      title: data.last_run_completed_at
+        ? `Last completed: ${formatDateTime(data.last_run_completed_at)}`
+        : "No completed run yet",
+    },
+    {
+      label: "Err",
+      value: data.last_error ? "Issue" : "OK",
+      title: data.last_error || "No recent capture errors",
+    },
   ];
 
-  for (const [key, value] of pairs) {
+  for (const pair of pairs) {
     const wrapper = document.createElement("div");
     const dt = document.createElement("dt");
-    dt.textContent = key;
     const dd = document.createElement("dd");
-    dd.textContent = value;
+    dt.textContent = pair.label;
+    dd.textContent = pair.value;
+    wrapper.title = pair.title;
     wrapper.append(dt, dd);
     captureStatus.append(wrapper);
   }
@@ -81,62 +150,87 @@ function renderTimePreview(data) {
     return;
   }
 
-  timePreview.innerHTML = `<strong>Active Filter:</strong> ` + [
-    `${formatDateTime(data.start)} → ${formatDateTime(data.end)}`,
-    data.matched_text ? `(Matched: "${data.matched_text}")` : null,
+  timePreview.innerHTML = [
+    `<strong>Active filter</strong>`,
+    `${escapeHtml(formatDateTime(data.start))} to ${escapeHtml(formatDateTime(data.end))}`,
+    data.matched_text ? `Matched "${escapeHtml(data.matched_text)}"` : null,
   ]
     .filter(Boolean)
     .join(" | ");
 }
 
-function resultCard(item) {
+function resultCard(item, options = {}) {
+  const { showScore = true } = options;
+  const score = showScore ? formatScore(item.score) : null;
+  const badges = [
+    `${escapeHtml(item.capture_count)} captures`,
+    score ? `Score ${score}` : null,
+  ]
+    .filter(Boolean)
+    .map((label) => `<span class="badge">${label}</span>`)
+    .join("");
+
   return `
-    <article class="card">
-      <h3 title="${escapeHtml(item.window_title)}">${escapeHtml(item.window_title)}</h3>
-      
-      <div class="badges">
-        <span class="badge" title="Process ID">PID: ${escapeHtml(item.pid)}</span>
-        <span class="badge" title="Score (Vector/Keyword)">Score: ${Number(item.score).toFixed(2) || "-"}</span>
-        <span class="badge">${escapeHtml(item.capture_count)} captures</span>
+    <article class="observation-card">
+      <div class="observation-card__header">
+        <div>
+          <p class="observation-card__eyebrow">${escapeHtml(formatDateTime(item.last_seen_at))}</p>
+          <h3 title="${escapeHtml(item.window_title)}">${escapeHtml(item.window_title)}</h3>
+        </div>
       </div>
-      
-      <div class="meta-line" style="margin-bottom: 0;">
-        ${escapeHtml(formatDateTime(item.first_seen_at))} → ${escapeHtml(formatDateTime(item.last_seen_at))}
+
+      <div class="observation-card__meta">
+        ${escapeHtml(formatDateTime(item.first_seen_at))} to ${escapeHtml(formatDateTime(item.last_seen_at))}
       </div>
-      
-      <img src="${escapeHtml(item.screenshot_url)}" alt="Screenshot" loading="lazy" />
-      
+
+      <div class="badge-row">${badges}</div>
+
+      <img src="${escapeHtml(item.screenshot_url)}" alt="Screenshot of ${escapeHtml(item.window_title)}" loading="lazy" />
+
       <details>
-        <summary>Extracted Markdown</summary>
+        <summary>Extracted markdown</summary>
         <pre>${escapeHtml(item.markdown)}</pre>
       </details>
-      ${item.notes ? `
+      ${
+        item.notes
+          ? `
       <details>
         <summary>Notes</summary>
         <pre>${escapeHtml(item.notes)}</pre>
-      </details>` : ""}
+      </details>`
+          : ""
+      }
     </article>
   `;
 }
 
+function setEmptyState(container, className, message) {
+  container.className = `${className} empty-state`;
+  container.textContent = message;
+}
+
 function renderResults(items) {
   if (!items || items.length === 0) {
-    results.className = "card-grid empty-state";
-    results.textContent = "No retrieval results match your query.";
+    setEmptyState(results, "observation-rail", "No retrieval results match your query.");
     return;
   }
-  results.className = "card-grid";
-  results.innerHTML = items.map(resultCard).join("");
+
+  results.className = "observation-rail";
+  results.innerHTML = items.map((item) => resultCard(item)).join("");
 }
 
 function renderRecent(items) {
   if (!items || items.length === 0) {
-    recentObservations.className = "card-grid empty-state";
-    recentObservations.textContent = "No observations indexed yet. Start the capture loop!";
+    setEmptyState(
+      recentObservations,
+      "recent-grid",
+      "No observations indexed yet. Start the capture loop to build memory.",
+    );
     return;
   }
-  recentObservations.className = "card-grid";
-  recentObservations.innerHTML = items.map(resultCard).join("");
+
+  recentObservations.className = "recent-grid";
+  recentObservations.innerHTML = items.map((item) => resultCard(item, { showScore: false })).join("");
 }
 
 async function refreshStatus() {
@@ -144,7 +238,9 @@ async function refreshStatus() {
     const data = await fetchJSON("/api/status");
     renderStatus(data);
   } catch (error) {
-    statusChip.innerHTML = `<span class="status-indicator" style="background: #ef4444;"></span> Error`;
+    statusChip.innerHTML = `<span class="status-indicator status-indicator-error"></span><span class="status-chip__label">Off</span>`;
+    statusChip.classList.remove("running");
+    statusChip.title = "Status unavailable";
   }
 }
 
@@ -152,16 +248,20 @@ async function loadRecentObservations() {
   try {
     const data = await fetchJSON("/api/observations?limit=8");
     renderRecent(data);
-  } catch (error) {
-    // Silently fail or update UI
+  } catch (_error) {
+    setEmptyState(
+      recentObservations,
+      "recent-grid",
+      "Recent observations could not be loaded right now.",
+    );
   }
 }
 
 async function previewTime() {
-  const btn = document.getElementById("previewTime");
-  const originalText = btn.textContent;
-  btn.textContent = "⏳...";
-  
+  const originalText = previewTimeBtn.textContent;
+  previewTimeBtn.textContent = "Parsing...";
+  previewTimeBtn.disabled = true;
+
   try {
     const data = await fetchJSON("/api/tools/extract-time", {
       method: "POST",
@@ -171,8 +271,15 @@ async function previewTime() {
   } catch (error) {
     timePreview.textContent = `Time extraction failed: ${error.message}`;
   } finally {
-    btn.textContent = originalText;
+    previewTimeBtn.textContent = originalText;
+    previewTimeBtn.disabled = false;
   }
+}
+
+function setAnswerLoading() {
+  answerOutput.classList.remove("empty-answer");
+  answerOutput.innerHTML =
+    '<p class="answer-loading">Searching screen history and generating a grounded response...</p>';
 }
 
 async function runQuery() {
@@ -181,11 +288,9 @@ async function runQuery() {
     return;
   }
 
-  // UI Loading State
   runQueryBtn.disabled = true;
-  runQueryBtn.innerHTML = "⏳ Thinking...";
-  answerOutput.classList.remove("empty-answer");
-  answerOutput.innerHTML = `<p style="color: #94a3b8; animation: pulse 1.5s infinite;">Searching screen history and generating response...</p>`;
+  runQueryBtn.textContent = "Thinking...";
+  setAnswerLoading();
   cleanedQuery.textContent = "";
 
   try {
@@ -197,33 +302,32 @@ async function runQuery() {
         limit: 8,
       }),
     });
-    
-    // Parse Markdown and Sanitize HTML output
+
     const rawHTML = marked.parse(data.answer);
     const cleanHTML = DOMPurify.sanitize(rawHTML);
     answerOutput.innerHTML = cleanHTML;
 
     cleanedQuery.textContent = data.cleaned_query
-      ? `Search Query used: "${data.cleaned_query}"`
+      ? `Search query: "${data.cleaned_query}"`
       : "";
-      
+
     renderTimePreview(data.extracted_time);
     renderResults(data.results);
-    
   } catch (error) {
     answerOutput.classList.add("empty-answer");
     answerOutput.innerHTML = `Query failed: ${escapeHtml(error.message)}`;
+    renderResults([]);
   } finally {
     runQueryBtn.disabled = false;
-    runQueryBtn.innerHTML = "✨ Ask Rewind";
+    runQueryBtn.textContent = "Ask Rewind";
   }
 }
 
-async function invokeCapture(url, btnId) {
-  const btn = document.getElementById(btnId);
-  const originalText = btn.textContent;
-  btn.textContent = "⏳...";
-  btn.disabled = true;
+async function invokeCapture(url, buttonId) {
+  const button = document.getElementById(buttonId);
+  const originalText = button.textContent;
+  button.textContent = "Working...";
+  button.disabled = true;
 
   try {
     await fetchJSON(url, { method: "POST" });
@@ -232,34 +336,45 @@ async function invokeCapture(url, btnId) {
   } catch (error) {
     console.error(`Capture action failed: ${error.message}`);
   } finally {
-    btn.textContent = originalText;
-    btn.disabled = false;
+    button.textContent = originalText;
+    button.disabled = false;
   }
 }
 
-// Event Listeners
-document.getElementById("startCapture").addEventListener("click", () => invokeCapture("/api/capture/start", "startCapture"));
-document.getElementById("stopCapture").addEventListener("click", () => invokeCapture("/api/capture/stop", "stopCapture"));
-document.getElementById("runCaptureOnce").addEventListener("click", () => invokeCapture("/api/capture/run-once", "runCaptureOnce"));
-document.getElementById("previewTime").addEventListener("click", previewTime);
-document.getElementById("runQuery").addEventListener("click", runQuery);
+themeToggle.addEventListener("click", () => {
+  const currentTheme = document.documentElement.dataset.theme || getSystemTheme();
+  const nextTheme = currentTheme === "dark" ? "light" : "dark";
+  localStorage.setItem(THEME_KEY, nextTheme);
+  applyTheme(nextTheme);
+});
 
-// Allow pressing 'Enter' inside query to run
-queryInput.addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && !e.shiftKey) {
-    e.preventDefault();
+document
+  .getElementById("startCapture")
+  .addEventListener("click", () => invokeCapture("/api/capture/start", "startCapture"));
+document
+  .getElementById("stopCapture")
+  .addEventListener("click", () => invokeCapture("/api/capture/stop", "stopCapture"));
+document
+  .getElementById("runCaptureOnce")
+  .addEventListener("click", () => invokeCapture("/api/capture/run-once", "runCaptureOnce"));
+previewTimeBtn.addEventListener("click", previewTime);
+runQueryBtn.addEventListener("click", runQuery);
+
+queryInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
     runQuery();
   }
 });
 
-timeFilterInput.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") {
-    e.preventDefault();
+timeFilterInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
     previewTime();
   }
 });
 
-// Initialize Loop
+initializeTheme();
 actionLoop();
 
 async function actionLoop() {

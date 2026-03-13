@@ -71,11 +71,17 @@ class LLMService:
         return TranscriptionOutput(raw_text=raw_text, markdown=markdown, notes=notes)
 
     def embed_text(self, text: str) -> list[float]:
+        return self.embed_texts([text])[0]
+
+    def embed_texts(self, texts: Sequence[str]) -> list[list[float]]:
+        values = [text for text in texts if text is not None]
+        if not values:
+            return []
         response = self.client.embeddings.create(
             model=self.settings.embedding_model,
-            input=text,
+            input=values,
         )
-        return list(response.data[0].embedding)
+        return [list(item.embedding) for item in response.data]
 
     def answer_question(
         self,

@@ -96,29 +96,23 @@ def safe_filename(name: str, max_len: int = 80) -> str:
     name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", name).strip()
     return (name or "untitled")[:max_len]
 
-def enum_windows():
-    windows = []
+def get_active_window():
+    hwnd = win32gui.GetForegroundWindow()
+    if not hwnd or not is_real_window(hwnd):
+        return None
 
-    def callback(hwnd, _):
-        if not is_real_window(hwnd):
-            return True
+    try:
+        left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+        _, pid = win32process.GetWindowThreadProcessId(hwnd)
+    except win32gui.error:
+        return None
 
-        try:
-            left, top, right, bottom = win32gui.GetWindowRect(hwnd)
-            _, pid = win32process.GetWindowThreadProcessId(hwnd)
-        except win32gui.error:
-            return True
-
-        windows.append({
-            "hwnd": hwnd,
-            "title": get_window_text(hwnd),
-            "pid": pid,
-            "rect": (left, top, right, bottom),
-        })
-        return True
-
-    win32gui.EnumWindows(callback, None)
-    return windows
+    return {
+        "hwnd": hwnd,
+        "title": get_window_text(hwnd),
+        "pid": pid,
+        "rect": (left, top, right, bottom),
+    }
 
 def capture_window(hwnd: int, output_path: str) -> bool:
     left, top, right, bottom = win32gui.GetWindowRect(hwnd)
@@ -173,8 +167,9 @@ def main():
     out_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "captures")
     os.makedirs(out_dir, exist_ok=True)
 
-    windows = enum_windows()
-    print(f"Found {len(windows)} windows\n")
+    active_window = get_active_window()
+    windows = [active_window] if active_window else []
+    print(f"Found {len(windows)} active window(s)\n")
 
     for w in windows:
         filename = f'{w["pid"]}_{safe_filename(w["title"])}.png'
@@ -211,7 +206,7 @@ class CapturedWindow:
         return f"{self.pid}:{self.title}"
 
 
-def capture_visible_windows(output_dir: Path, *, captured_at: datetime | None = None) -> list[CapturedWindow]:
+def capture_active_window(output_dir: Path, *, captured_at: datetime | None = None) -> list[CapturedWindow]:
     if os.name != "nt":
         raise RuntimeError("The Win32 screenshot capture path only works on Windows.")
 
@@ -219,16 +214,18 @@ def capture_visible_windows(output_dir: Path, *, captured_at: datetime | None = 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    window = get_active_window()
+    if not window:
+        return []
+
     results: list[CapturedWindow] = []
-    for window in enum_windows():
-        filename = (
-            f"{captured_at.strftime('%Y%m%d_%H%M%S')}_"
-            f"{window['pid']}_{safe_filename(window['title'])}.png"
-        )
-        path = output_dir / filename
-        success = capture_window(window["hwnd"], str(path))
-        if not success:
-            continue
+    filename = (
+        f"{captured_at.strftime('%Y%m%d_%H%M%S')}_"
+        f"{window['pid']}_{safe_filename(window['title'])}.png"
+    )
+    path = output_dir / filename
+    success = capture_window(window["hwnd"], str(path))
+    if success:
         results.append(
             CapturedWindow(
                 hwnd=window["hwnd"],
@@ -240,3 +237,7 @@ def capture_visible_windows(output_dir: Path, *, captured_at: datetime | None = 
             )
         )
     return results
+
+
+def capture_visible_windows(output_dir: Path, *, captured_at: datetime | None = None) -> list[CapturedWindow]:
+    return capture_active_window(output_dir, captured_at=captured_at)

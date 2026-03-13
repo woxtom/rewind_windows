@@ -1,86 +1,140 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark light" />
     <title>Rewind Markdown</title>
+    <script>
+      (() => {
+        const root = document.documentElement;
+        const savedTheme = localStorage.getItem("rewind-theme");
+        const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        const theme = savedTheme || (systemPrefersDark ? "dark" : "light");
+        root.dataset.theme = theme;
+        root.classList.toggle("dark", theme === "dark");
+      })();
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: ["class", '[data-theme="dark"]'],
+      };
+    </script>
     <link rel="stylesheet" href="/static/styles.css" />
-    <!-- Markdown Parser -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <!-- HTML Sanitizer for security against malicious window titles/content -->
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
   </head>
-  <body>
-    <div class="background-glow"></div>
-    
-    <header class="page-header">
-      <div class="header-text">
-        <h1>Rewind Markdown</h1>
-        <p>
-          Capture screenshots, convert them into retrieval-friendly Markdown, embed them with time,
-          and query your screen history from a browser.
-        </p>
-      </div>
-      <div class="status-chip" id="statusChip">
-        <span class="status-indicator"></span> Loading status…
-      </div>
-    </header>
+  <body class="min-h-screen antialiased">
+    <div class="page-shell mx-auto min-h-screen max-w-[1540px] px-3 py-4 sm:px-4 lg:px-6">
+      <main class="app-frame">
+        <aside class="app-rail">
+          <div class="rail-stack rail-stack-top">
+            <button id="themeToggle" class="rail-button theme-toggle" type="button" aria-live="polite">
+              <span class="rail-button__glyph" aria-hidden="true">o</span>
+              <span class="rail-button__label" id="themeToggleLabel">Light</span>
+            </button>
 
-    <main class="layout">
-      <!-- Query Panel made prominent -->
-      <section class="panel full-span hero-panel">
-        <h2>Ask your screen history</h2>
-        <div class="query-container">
-          <label class="input-group">
-            <span>What are you looking for?</span>
-            <textarea id="queryInput" rows="3" placeholder="e.g. What was I looking at when I was debugging the login issue?"></textarea>
-          </label>
-          <label class="input-group">
-            <span>Time filter (Optional)</span>
-            <div class="input-with-button">
-              <input id="timeFilterInput" type="text" placeholder="yesterday afternoon, last 2 hours..." />
-              <button id="previewTime" class="secondary icon-btn" title="Preview time filter">⏱️ Preview</button>
+            <div class="status-chip" id="statusChip" role="status" aria-live="polite">
+              <span class="status-indicator"></span>
+              <span class="status-chip__label">Loading</span>
             </div>
-          </label>
-        </div>
-        <div class="button-row action-row">
-          <div class="hint" id="timePreview">No time filter parsed yet.</div>
-          <button id="runQuery" class="primary-btn">✨ Ask Rewind</button>
-        </div>
-      </section>
-
-      <!-- Answer Panel -->
-      <section class="panel answer-panel full-span">
-        <h2>Grounded answer</h2>
-        <div class="meta-line" id="cleanedQuery"></div>
-        <div id="answerOutput" class="markdown-body empty-answer">
-          Run a query to see the AI's response here.
-        </div>
-      </section>
-
-      <!-- Capture Pipeline details -->
-      <section class="panel capture-panel full-span">
-        <div class="panel-header-row">
-          <h2>Capture Pipeline</h2>
-          <div class="button-row">
-            <button id="startCapture">▶ Start Loop</button>
-            <button id="stopCapture" class="secondary">■ Stop</button>
-            <button id="runCaptureOnce" class="secondary">↻ Run Once</button>
           </div>
+
+          <div class="rail-stack rail-stack-actions">
+            <button id="startCapture" class="rail-button rail-action rail-action-primary" type="button" title="Start capture loop">
+              <span class="rail-button__glyph" aria-hidden="true">></span>
+              <span class="rail-button__label">Start</span>
+            </button>
+            <button id="stopCapture" class="rail-button rail-action" type="button" title="Stop capture loop">
+              <span class="rail-button__glyph" aria-hidden="true">[]</span>
+              <span class="rail-button__label">Stop</span>
+            </button>
+            <button id="runCaptureOnce" class="rail-button rail-action" type="button" title="Run capture once">
+              <span class="rail-button__glyph" aria-hidden="true">1x</span>
+              <span class="rail-button__label">Once</span>
+            </button>
+          </div>
+
+          <dl class="status-list" id="captureStatus"></dl>
+        </aside>
+
+        <div class="main-column">
+          <section class="surface hero-card">
+            <div class="section-head">
+              <div>
+                <p class="section-eyebrow">Ask your screen history</p>
+                <h2>Search the moments behind your work</h2>
+              </div>
+            </div>
+
+            <div class="hero-grid">
+              <label class="input-block">
+                <span>Question</span>
+                <textarea
+                  id="queryInput"
+                  rows="4"
+                  placeholder="What were the note-taking strategies I was reading earlier today?"
+                ></textarea>
+              </label>
+
+              <label class="input-block">
+                <span>Time filter</span>
+                <input
+                  id="timeFilterInput"
+                  type="text"
+                  placeholder="today, yesterday afternoon, last 2 hours"
+                />
+              </label>
+            </div>
+
+            <div class="hero-footer">
+              <div class="time-preview" id="timePreview">No time filter parsed yet.</div>
+              <div class="button-row">
+                <button id="previewTime" class="ghost-btn" type="button">Preview time</button>
+                <button id="runQuery" class="primary-btn" type="button">Ask Rewind</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="surface answer-card">
+            <div class="section-head">
+              <div>
+                <p class="section-eyebrow">Grounded answer</p>
+                <h2>Answer</h2>
+              </div>
+            </div>
+
+            <p class="query-meta" id="cleanedQuery"></p>
+            <div id="answerOutput" class="markdown-body empty-answer">
+              Run a query to see the AI response here.
+            </div>
+
+            <div class="observations-block">
+              <div class="section-head compact">
+                <div>
+                  <p class="section-eyebrow">Retrieved observations</p>
+                </div>
+              </div>
+
+              <div id="results" class="observation-rail empty-state">No retrieval results yet.</div>
+            </div>
+          </section>
+
+          <section class="surface recent-card">
+            <div class="section-head compact">
+              <div>
+                <p class="section-eyebrow">Recent indexed observations</p>
+              </div>
+            </div>
+
+            <div id="recentObservations" class="recent-grid empty-state">
+              No observations indexed yet.
+            </div>
+          </section>
         </div>
-        <dl class="key-value" id="captureStatus"></dl>
-      </section>
-
-      <section class="panel full-span transparent-panel">
-        <h2>Retrieved Observations</h2>
-        <div id="results" class="card-grid empty-state">No retrieval results yet.</div>
-      </section>
-
-      <section class="panel full-span transparent-panel">
-        <h2>Recent Indexed Observations</h2>
-        <div id="recentObservations" class="card-grid empty-state">No observations indexed yet.</div>
-      </section>
-    </main>
+      </main>
+    </div>
 
     <script src="/static/app.js"></script>
   </body>
