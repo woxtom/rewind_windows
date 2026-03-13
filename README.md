@@ -63,8 +63,8 @@ LLM answer grounded on retrieved observations
 - Stores `first_seen_at`, `last_seen_at`, `capture_count`, `window_title`, `pid`, screenshot path, Markdown, and notes for each observation.
 - Splits observations into heading-aware chunks for chunk-level keyword and vector retrieval.
 - Uses SQLite FTS5 when available and falls back to `LIKE` matching when it is not.
-- Stores embeddings in compact binary form inside SQLite instead of keeping large JSON arrays.
-- Re-encodes screenshots to smaller `.webp` files when Pillow succeeds; otherwise keeps the original image.
+- Stores embeddings in compact binary form inside SQLite
+- Re-encodes screenshots to smaller `.webp` files
 - Supports time filters such as:
   - `today`
   - `yesterday afternoon`
@@ -83,7 +83,7 @@ LLM answer grounded on retrieved observations
 
 - Windows for live capture. The API and UI can still run elsewhere if you are only querying data that was already captured.
 - Python 3.11 or newer.
-- An `OPENAI_API_KEY` for screenshot transcription, embeddings, and final answer generation.
+- An `OPENAI_API_KEY` for screenshot transcription, embeddings, and final answer generation. You may select `OPENAI_API_BASE` for OpenAI-compatible endpoints if you are using a different provider or a local proxy.
 - SQLite with FTS5 is recommended but not strictly required.
 - Internet access for the OpenAI API.
 - The default frontend also loads Tailwind, `marked`, and `DOMPurify` from public CDNs.
